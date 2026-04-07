@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spring Planting Tracker</title>
+
+<!-- =====================================================
+  STEP 1: Replace the firebaseConfig block below with
+  YOUR config from the Firebase console.
+  See SETUP-GUIDE.md for step-by-step instructions.
+====================================================== -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD7rRlgyK53VyzBK0JgJDW4QAGLW58VqfA",
+  authDomain: "tree-planting-tracker-b72c9.firebaseapp.com",
+  projectId: "tree-planting-tracker-b72c9",
+  storageBucket: "tree-planting-tracker-b72c9.firebasestorage.app",
+  messagingSenderId: "513598794921",
+  appId: "1:513598794921:web:0342df842c874c6318cdb8"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const COL = "planting2025";
+
+// ── state ──────────────────────────────────────────────
+let records = [];
+let editingId = null;
+let noteTargetId = null;
+let sortMode = 'status';
+
+const STATUS_ORDER = ['Ready to plant','Tree selected','Confirmed request','Interested – contacted','Awaiting response','Letter returned','Letter sent','Planted','Not interested','No response',''];
+const STATUS_COLORS = {
+  'Letter sent':            { bg:'#E6F1FB', color:'#0C447C' },
+  'Letter returned':        { bg:'#FAEEDA', color:'#633806' },
+  'Interested – contacted': { bg:'#EAF3DE', color:'#27500A' },
+  'Awaiting response':      { bg:'#FAEEDA', color:'#854F0B' },
+  'Confirmed request':      { bg:'#E1F5EE', color:'#0F6E56' },
+  'Tree selected':          { bg:'#9FE1CB', color:'#085041' },
+  'Ready to plant':         { bg:'#C0DD97', color:'#3B6D11' },
+  'Planted':                { bg:'#EAF3DE', color:'#3B6D11' },
+  'Not interested':         { bg:'#F1EFE8', color:'#5F5E5A' },
+  'No response':            { bg:'#F1EFE8', color:'#5F5E5A' },
+};
+
+// ── helpers ────────────────────────────────────────────
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function ts() {
+  const d = new Date();
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+function badge(status) {
+  const c = STATUS_COLORS[status] || {bg:'#F1EFE8',color:'#5F5E5A'};
+  return `<span class="badge" style="background:${c.bg};color:${c.color};">${status}</span>`;
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── firebase: listen for changes ───────────────────────
+function startListen() {
+  showStatus('Connecting…');
+  onSnapshot(collection(db, COL), snap => {
+    records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    hideStatus();
+    renderCountBar();
+    renderCards();
+    if (document.getElementById('history').classList.contains('active')) renderHistory();
+  }, err => {
+    showStatus('⚠ Connection error — check your Firebase config.');
+    console.error(err);
+  });
+}
+
+async function saveToFirebase(record) {
+  const { id, ...data } = record;
+  await setDoc(doc(db, COL, id), data);
+}
+
+async function deleteFromFirebase(id) {
+  await deleteDoc(doc(db, COL, id));
+}
+
+// ── status banner ──────────────────────────────────────
+function showStatus(msg) {
+  document.getElementById('status-bar').textContent = msg;
+  document.getElementById('status-bar').style.display = 'block';
+}
+function hideStatus() {
+  document.getElementById('status-bar').style.display = 'none';
+}
+
+// ── tabs ───────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(tab).classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  if (tab === 'history') renderHistory();
+}
+document.querySelectorAll('[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+// ── sort ───────────────────────────────────────────────
+function setSort(mode) {
+  sortMode = mode;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === mode));
+  renderCards();
+}
+document.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => setSort(b.dataset.sort)));
+
+function sortRecords(arr) {
+  if (sortMode === 'status') {
+    return arr.sort((a,b) => {
+      if (a.followup !== b.followup) return a.followup ? -1 : 1;
+      const ai = STATUS_ORDER.indexOf(a.status||''), bi = STATUS_ORDER.indexOf(b.status||'');
+      if (ai !== bi) return ai - bi;
+      return (a.street||'').localeCompare(b.street||'');
+    });
+  } else if (sortMode === 'date') {
+    return arr.sort((a,b) => {
+      if (a.followup !== b.followup) return a.followup ? -1 : 1;
+      return (b.updated||'').localeCompare(a.updated||'');
+    });
+  } else {
+    return arr.sort((a,b) => {
+      if (a.followup !== b.followup) return a.followup ? -1 : 1;
+      return (a.street||'').localeCompare(b.street||'') || (parseInt(a.housenum)||0) - (parseInt(b.housenum)||0);
+    });
+  }
+}
+
+// ── modals ─────────────────────────────────────────────
+function openAdd() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Add address';
+  ['housenum','street','owner','email','phone','note','tree1','tree2'].forEach(f => document.getElementById('f-'+f).value = '');
+  document.getElementById('f-source').value = '';
+  document.getElementById('f-status').value = '';
+  document.getElementById('f-followup').checked = false;
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('f-housenum').focus();
+}
+
+function openEdit(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Edit — ' + r.housenum + ' ' + r.street;
+  document.getElementById('f-housenum').value = r.housenum||'';
+  document.getElementById('f-street').value = r.street||'';
+  document.getElementById('f-owner').value = r.owner||'';
+  document.getElementById('f-source').value = r.source||'';
+  document.getElementById('f-email').value = r.email||'';
+  document.getElementById('f-phone').value = r.phone||'';
+  document.getElementById('f-status').value = r.status||'';
+  document.getElementById('f-tree1').value = r.tree1||'';
+  document.getElementById('f-tree2').value = r.tree2||'';
+  document.getElementById('f-followup').checked = !!r.followup;
+  document.getElementById('f-note').value = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveRecord() {
+  const housenum = document.getElementById('f-housenum').value.trim();
+  const street = document.getElementById('f-street').value.trim();
+  if (!housenum || !street) { alert('House number and street are required.'); return; }
+  const note = document.getElementById('f-note').value.trim();
+  const status = document.getElementById('f-status').value;
+  const followup = document.getElementById('f-followup').checked;
+  let record;
+  if (editingId) {
+    record = { ...records.find(x => x.id === editingId) };
+    const prevStatus = record.status, prevFollowup = record.followup;
+    Object.assign(record, {
+      housenum, street, owner: document.getElementById('f-owner').value.trim(),
+      source: document.getElementById('f-source').value, email: document.getElementById('f-email').value.trim(),
+      phone: document.getElementById('f-phone').value.trim(), status, followup,
+      tree1: document.getElementById('f-tree1').value.trim(), tree2: document.getElementById('f-tree2').value.trim(),
+      updated: ts()
+    });
+    const logParts = [];
+    if (status && status !== prevStatus) logParts.push('Status → ' + status);
+    if (followup !== prevFollowup) logParts.push(followup ? 'Flagged for follow-up' : 'Follow-up cleared');
+    if (note) logParts.push(note);
+    if (logParts.length) record.log = [...(record.log||[]), {date: ts(), text: logParts.join(' · ')}];
+  } else {
+    let initNote = 'Record created';
+    if (status) initNote += '. Status: ' + status;
+    if (followup) initNote += '. Flagged for follow-up';
+    if (note) initNote += ' — ' + note;
+    record = {
+      id: uid(), housenum, street,
+      owner: document.getElementById('f-owner').value.trim(),
+      source: document.getElementById('f-source').value,
+      email: document.getElementById('f-email').value.trim(),
+      phone: document.getElementById('f-phone').value.trim(),
+      status, tree1: document.getElementById('f-tree1').value.trim(),
+      tree2: document.getElementById('f-tree2').value.trim(),
+      followup, created: ts(), updated: ts(),
+      log: [{date: ts(), text: initNote + '.'}]
+    };
+  }
+  closeModal();
+  await saveToFirebase(record);
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this record? This cannot be undone.')) return;
+  await deleteFromFirebase(id);
+}
+
+function openNoteModal(id) {
+  noteTargetId = id;
+  const r = records.find(x => x.id === id);
+  document.getElementById('note-addr-label').textContent = r.housenum + ' ' + r.street + (r.owner ? ' · ' + r.owner : '');
+  document.getElementById('note-text').value = '';
+  document.getElementById('note-status').value = '';
+  document.getElementById('note-followup').checked = !!r.followup;
+  document.getElementById('note-followup-label').textContent = r.followup ? 'Follow-up flagged (uncheck to clear)' : 'Flag for follow-up';
+  document.getElementById('note-modal').classList.add('open');
+  document.getElementById('note-text').focus();
+}
+
+function closeNoteModal() { document.getElementById('note-modal').classList.remove('open'); noteTargetId = null; }
+
+async function saveNote() {
+  if (!noteTargetId) return;
+  const r = { ...records.find(x => x.id === noteTargetId) };
+  const note = document.getElementById('note-text').value.trim();
+  const newStatus = document.getElementById('note-status').value;
+  const newFollowup = document.getElementById('note-followup').checked;
+  if (!note && !newStatus && newFollowup === r.followup) { alert('Add a note, status update, or flag change.'); return; }
+  const logParts = [];
+  if (newStatus && newStatus !== r.status) { r.status = newStatus; logParts.push('Status → ' + newStatus); }
+  if (newFollowup !== r.followup) { r.followup = newFollowup; logParts.push(newFollowup ? 'Flagged for follow-up' : 'Follow-up cleared'); }
+  if (note) logParts.push(note);
+  r.log = [...(r.log||[]), {date: ts(), text: logParts.join(' · ')}];
+  r.updated = ts();
+  closeNoteModal();
+  await saveToFirebase(r);
+}
+
+// ── render ─────────────────────────────────────────────
+function renderCountBar() {
+  const counts = {}, flagCount = records.filter(r => r.followup).length;
+  records.forEach(r => { counts[r.status||'Unknown'] = (counts[r.status||'Unknown']||0) + 1; });
+  const order = ['Ready to plant','Tree selected','Confirmed request','Interested – contacted','Awaiting response','Letter returned','Letter sent','Planted','Not interested','No response'];
+  let html = `<div class="count-pill">Total <strong>${records.length}</strong></div>`;
+  if (flagCount) html += `<div class="count-pill flag-pill"><strong>${flagCount}</strong> follow-up</div>`;
+  order.forEach(s => { if (counts[s]) html += `<div class="count-pill">${badge(s)} <strong>${counts[s]}</strong></div>`; });
+  document.getElementById('count-bar').innerHTML = html;
+}
+
+function renderCards() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const fs = document.getElementById('filter-status').value;
+  const fsrc = document.getElementById('filter-source').value;
+  const fflag = document.getElementById('filter-flag').value;
+  let filtered = records.filter(r => {
+    const hay = [r.housenum, r.street, r.owner, r.email, r.phone, r.tree1, r.tree2, ...(r.log||[]).map(l=>l.text)].join(' ').toLowerCase();
+    return (!q || hay.includes(q)) && (!fs || r.status === fs) && (!fsrc || r.source === fsrc) && (!fflag || r.followup);
+  });
+  sortRecords(filtered);
+  const el = document.getElementById('cards');
+  if (!filtered.length) { el.innerHTML = '<p class="empty">No records match your filters.</p>'; return; }
+  el.innerHTML = filtered.map(r => {
+    const trees = [r.tree1, r.tree2].filter(Boolean).join(', ') || '—';
+    const lastLog = r.log && r.log.length ? r.log[r.log.length-1] : null;
+    return `<div class="card${r.followup ? ' flagged' : ''}">
+      <div class="card-header">
+        <div>
+          <div class="card-addr">${esc(r.housenum)} ${esc(r.street)}${r.followup ? ' <span class="flag-badge">! follow-up</span>' : ''}</div>
+          <div class="card-meta">${esc(r.owner||'No owner name')} &middot; via ${esc(r.source||'unknown')} &middot; updated ${esc(r.updated||r.created)}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn small" onclick="openNoteModal('${r.id}')">+ Note</button>
+          <button class="btn small" onclick="openEdit('${r.id}')">Edit</button>
+          <button class="btn small danger" onclick="deleteRecord('${r.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div><div class="field-label">Status</div><div>${r.status ? badge(r.status) : '—'}</div></div>
+        <div><div class="field-label">Trees requested</div><div class="field-val">${esc(trees)}</div></div>
+        <div><div class="field-label">Email</div><div class="field-sm">${esc(r.email||'—')}</div></div>
+        <div><div class="field-label">Phone</div><div class="field-sm">${esc(r.phone||'—')}</div></div>
+        ${lastLog ? `<div class="full-col"><div class="field-label">Last note</div><div class="field-sm muted">${esc(lastLog.date)} — ${esc(lastLog.text)}</div></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderHistory() {
+  const q = document.getElementById('hist-search').value.toLowerCase();
+  let sorted = [...records];
+  sortRecords(sorted);
+  const filtered = sorted.filter(r => {
+    const hay = [r.housenum, r.street, r.owner, ...(r.log||[]).map(l=>l.text)].join(' ').toLowerCase();
+    return !q || hay.includes(q);
+  });
+  const el = document.getElementById('hist-list');
+  if (!filtered.length) { el.innerHTML = '<p class="empty">No records found.</p>'; return; }
+  el.innerHTML = filtered.map(r => {
+    const logs = (r.log||[]).slice().reverse();
+    return `<div class="card${r.followup ? ' flagged' : ''}">
+      <div class="card-addr">${esc(r.housenum)} ${esc(r.street)} <span class="muted">${r.owner ? '· ' + esc(r.owner) : ''}</span>${r.followup ? ' <span class="flag-badge">! follow-up</span>' : ''}</div>
+      <div style="margin-top:8px;">
+        ${logs.length ? logs.map(l => `<div class="log-row"><span class="muted">${esc(l.date)}</span> — ${esc(l.text)}</div>`).join('') : '<div class="muted" style="font-size:12px;">No log entries yet.</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── export ─────────────────────────────────────────────
+function exportXLSX() {
+  const sorted = [...records];
+  sortRecords(sorted);
+  const rows = sorted.map(r => ({
+    'House #': r.housenum, 'Street': r.street, 'Owner': r.owner,
+    'Email': r.email, 'Phone': r.phone, 'How contacted': r.source,
+    'Status': r.status, 'Tree 1': r.tree1, 'Tree 2': r.tree2,
+    'Follow-up needed': r.followup ? 'YES' : '',
+    'Last updated': r.updated,
+    'Last note': r.log && r.log.length ? r.log[r.log.length-1].text : ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [8,18,20,26,14,16,22,22,22,14,18,40].map(w => ({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '2025 Planting');
+  XLSX.writeFile(wb, 'spring_planting_2025.xlsx');
+}
+
+// ── wire up buttons ────────────────────────────────────
+document.getElementById('btn-add').addEventListener('click', openAdd);
+document.getElementById('btn-export').addEventListener('click', exportXLSX);
+document.getElementById('btn-save').addEventListener('click', saveRecord);
+document.getElementById('btn-cancel').addEventListener('click', closeModal);
+document.getElementById('btn-save-note').addEventListener('click', saveNote);
+document.getElementById('btn-cancel-note').addEventListener('click', closeNoteModal);
+document.getElementById('search').addEventListener('input', renderCards);
+document.getElementById('filter-status').addEventListener('change', renderCards);
+document.getElementById('filter-source').addEventListener('change', renderCards);
+document.getElementById('filter-flag').addEventListener('change', renderCards);
+document.getElementById('hist-search').addEventListener('input', renderHistory);
+
+document.getElementById('modal').addEventListener('click', e => { if (e.target === document.getElementById('modal')) closeModal(); });
+document.getElementById('note-modal').addEventListener('click', e => { if (e.target === document.getElementById('note-modal')) closeNoteModal(); });
+
+// expose to inline onclick
+window.openEdit = openEdit;
+window.openNoteModal = openNoteModal;
+window.deleteRecord = deleteRecord;
+
+// ── go ─────────────────────────────────────────────────
+startListen();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #3B6D11; --green-light: #EAF3DE; --green-mid: #C0DD97;
+    --teal: #0F6E56; --teal-light: #E1F5EE;
+    --red: #A32D2D; --red-light: #FCEBEB;
+    --amber-light: #FAEEDA; --amber-dark: #854F0B;
+    --gray: #5F5E5A; --gray-light: #F1EFE8;
+    --blue-light: #E6F1FB; --blue-dark: #0C447C;
+    --border: #d0d0cc; --border-light: #e8e8e4;
+    --text: #1a1a18; --text-muted: #6b6b66; --text-hint: #9b9b96;
+    --bg: #ffffff; --bg-surface: #f7f7f4; --bg-hover: #f0f0ec;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: var(--text); background: var(--bg-surface); min-height: 100vh; }
+  .app { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  #status-bar { display: none; background: var(--amber-light); color: var(--amber-dark); padding: 8px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 1rem; }
+  .app-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem; }
+  .app-title { font-size: 20px; font-weight: 600; }
+  .app-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-light); margin-bottom: 1.25rem; }
+  .tab { padding: 8px 16px; cursor: pointer; border: none; background: none; font-size: 13px; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+  .section { display: none; } .section.active { display: block; }
+  label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; margin-top: 12px; }
+  input, select, textarea { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; background: var(--bg); color: var(--text); font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #888; }
+  textarea { resize: vertical; min-height: 60px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-size: 13px; background: var(--bg); color: var(--text); font-family: inherit; transition: background 0.1s; }
+  .btn:hover { background: var(--bg-hover); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn.primary:hover { opacity: 0.85; }
+  .btn.danger { color: var(--red); border-color: #f0bebe; }
+  .btn.danger:hover { background: var(--red-light); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+  .flag-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; background: var(--red-light); color: var(--red); }
+  .count-bar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .count-pill { background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 5px 10px; font-size: 12px; display: flex; align-items: center; gap: 5px; }
+  .count-pill.flag-pill { background: var(--red-light); border-color: #f0bebe; color: var(--red); }
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+  .filter-bar input, .filter-bar select { width: auto; flex: 1; min-width: 120px; }
+  .sort-group { display: flex; gap: 4px; margin-left: auto; align-items: center; }
+  .sort-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .sort-btn { padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; background: var(--bg); color: var(--text-muted); cursor: pointer; font-family: inherit; }
+  .sort-btn.active { background: var(--bg-hover); color: var(--text); font-weight: 500; }
+  .card { background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; }
+  .card.flagged { border-left: 3px solid #E24B4A; }
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .card-addr { font-size: 15px; font-weight: 600; }
+  .card-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .card-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .card-body { margin-top: 10px; border-top: 1px solid var(--border-light); padding-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+  .field-label { font-size: 11px; color: var(--text-muted); margin-bottom: 1px; }
+  .field-val { font-size: 13px; }
+  .field-sm { font-size: 12px; }
+  .full-col { grid-column: 1 / -1; }
+  .muted { color: var(--text-muted); }
+  .log-row { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border-light); }
+  .log-row:last-child { border-bottom: none; }
+  .empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 2rem 0; }
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100; align-items: flex-start; justify-content: center; padding-top: 5vh; overflow-y: auto; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--bg); border-radius: var(--radius-lg); padding: 1.5rem; width: 90%; max-width: 580px; border: 1px solid var(--border); margin-bottom: 2rem; }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 1rem; }
+  .followup-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); }
+  .followup-row input[type=checkbox] { width: auto; }
+  .followup-label { font-size: 13px; cursor: pointer; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.25rem; border-top: 1px solid var(--border-light); padding-top: 1rem; }
+  @media (max-width: 560px) {
+    .row2 { grid-template-columns: 1fr; }
+    .card-body { grid-template-columns: 1fr; }
+    .card-actions { margin-top: 8px; }
+    .sort-group { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="status-bar"></div>
+
+  <div class="app-header">
+    <div>
+      <div class="app-title">Spring planting tracker</div>
+      <div class="app-sub">2025 season &mdash; East Aurora</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btn-export">Export to Excel ↓</button>
+      <button class="btn primary" id="btn-add">+ Add address</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="dashboard">Dashboard</button>
+    <button class="tab" data-tab="history">History log</button>
+  </div>
+
+  <div id="dashboard" class="section active">
+    <div class="count-bar" id="count-bar"></div>
+    <div class="filter-bar">
+      <input type="text" id="search" placeholder="Search address, owner, notes…" style="max-width:210px;">
+      <select id="filter-status">
+        <option value="">All statuses</option>
+        <option>Letter sent</option>
+        <option>Letter returned</option>
+        <option>Interested – contacted</option>
+        <option>Awaiting response</option>
+        <option>Confirmed request</option>
+        <option>Tree selected</option>
+        <option>Ready to plant</option>
+        <option>Planted</option>
+        <option>Not interested</option>
+        <option>No response</option>
+      </select>
+      <select id="filter-source">
+        <option value="">All sources</option>
+        <option>Letter returned</option>
+        <option>Email</option>
+        <option>Facebook</option>
+        <option>Phone</option>
+        <option>Direct contact</option>
+      </select>
+      <select id="filter-flag">
+        <option value="">All</option>
+        <option value="1">Follow-up needed only</option>
+      </select>
+      <div class="sort-group">
+        <span class="sort-label">Sort:</span>
+        <button class="sort-btn active" data-sort="status">Status</button>
+        <button class="sort-btn" data-sort="date">Last updated</button>
+        <button class="sort-btn" data-sort="address">Address</button>
+      </div>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <div id="history" class="section">
+    <div class="filter-bar">
+      <input type="text" id="hist-search" placeholder="Search address or notes…" style="max-width:300px;">
+    </div>
+    <div id="hist-list"></div>
+  </div>
+</div>
+
+<!-- Add/Edit modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Add address</div>
+    <div class="row2">
+      <div><label>House number</label><input id="f-housenum" type="text" placeholder="e.g. 124"></div>
+      <div><label>Street</label><input id="f-street" type="text" placeholder="e.g. Elm St"></div>
+    </div>
+    <div class="row2">
+      <div><label>Owner name</label><input id="f-owner" type="text" placeholder="Last, First"></div>
+      <div><label>How they reached us</label>
+        <select id="f-source">
+          <option value="">— select —</option>
+          <option>Letter returned</option>
+          <option>Email</option>
+          <option>Facebook</option>
+          <option>Phone</option>
+          <option>Direct contact</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div><label>Email</label><input id="f-email" type="text" placeholder="optional"></div>
+      <div><label>Phone</label><input id="f-phone" type="text" placeholder="optional"></div>
+    </div>
+    <div><label>Current status</label>
+      <select id="f-status">
+        <option value="">— select —</option>
+        <option>Letter sent</option>
+        <option>Letter returned</option>
+        <option>Interested – contacted</option>
+        <option>Awaiting response</option>
+        <option>Confirmed request</option>
+        <option>Tree selected</option>
+        <option>Ready to plant</option>
+        <option>Planted</option>
+        <option>Not interested</option>
+        <option>No response</option>
+      </select>
+    </div>
+    <div class="row2">
+      <div><label>Tree preference 1</label><input id="f-tree1" type="text" placeholder="e.g. Autumn Blaze Maple"></div>
+      <div><label>Tree preference 2 (optional)</label><input id="f-tree2" type="text" placeholder="e.g. Honey Locust"></div>
+    </div>
+    <div class="followup-row">
+      <input type="checkbox" id="f-followup">
+      <label class="followup-label" for="f-followup">Flag for follow-up</label>
+    </div>
+    <div><label>Note / update</label>
+      <textarea id="f-note" placeholder="Add a note (timestamped automatically)"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn" id="btn-cancel">Cancel</button>
+      <button class="btn primary" id="btn-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note modal -->
+<div class="modal-bg" id="note-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title">Add note</div>
+    <div class="muted" style="font-size:13px;margin-bottom:8px;" id="note-addr-label"></div>
+    <textarea id="note-text" placeholder="What happened? New contact, preference change, etc." style="min-height:80px;"></textarea>
+    <div style="margin-top:10px;">
+      <label>Update status (optional)</label>
+      <select id="note-status">
+        <option value="">— keep current —</option>
+        <option>Letter sent</option>
+        <option>Letter returned</option>
+        <option>Interested – contacted</option>
+        <option>Awaiting response</option>
+        <option>Confirmed request</option>
+        <option>Tree selected</option>
+        <option>Ready to plant</option>
+        <option>Planted</option>
+        <option>Not interested</option>
+        <option>No response</option>
+      </select>
+    </div>
+    <div class="followup-row" style="margin-top:10px;">
+      <input type="checkbox" id="note-followup">
+      <label class="followup-label" for="note-followup" id="note-followup-label">Flag for follow-up</label>
+    </div>
+    <div class="form-actions">
+      <button class="btn" id="btn-cancel-note">Cancel</button>
+      <button class="btn primary" id="btn-save-note">Add note</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
