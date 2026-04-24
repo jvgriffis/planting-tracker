@@ -32,9 +32,11 @@ let records = [];
 let editingId = null;
 let noteTargetId = null;
 let sortMode = 'status';
+let filterNeedsWork = false;
 
-const STATUS_ORDER = ['Ready to plant','Tree selected','Confirmed request','Interested – contacted','Awaiting response','Letter returned','Letter sent','Planted','Not interested','No response','Hold','Cannot plant',''];
+const STATUS_ORDER = ['Planted','Ready to plant','Tree selected','Confirmed request','Interested – contacted','Awaiting response','Letter returned','Letter sent','Not interested','No response','Hold','Cannot plant',''];
 const EXPORT_EXCLUDE = new Set(['Hold','Cannot plant']);
+const NEEDS_WORK_EXCLUDE = new Set(['Planted','Ready to plant','Tree selected','Hold','Cannot plant']);
 const STATUS_COLORS = {
   'Letter sent':            { bg:'#E6F1FB', color:'#0C447C' },
   'Letter returned':        { bg:'#FAEEDA', color:'#633806' },
@@ -270,7 +272,7 @@ function renderCards() {
   const fflag = document.getElementById('filter-flag').value;
   let filtered = records.filter(r => {
     const hay = [r.housenum, r.street, r.owner, r.email, r.phone, r.tree1, r.tree2, ...(r.log||[]).map(l=>l.text)].join(' ').toLowerCase();
-    return (!q || hay.includes(q)) && (!fs || r.status === fs) && (!fsrc || r.source === fsrc) && (!fflag || r.followup);
+    return (!q || hay.includes(q)) && (!fs || r.status === fs) && (!fsrc || r.source === fsrc) && (!fflag || r.followup) && (!filterNeedsWork || !NEEDS_WORK_EXCLUDE.has(r.status||''));
   });
   sortRecords(filtered);
   const el = document.getElementById('cards');
@@ -354,6 +356,13 @@ document.getElementById('btn-reset-filters').addEventListener('click', () => {
   document.getElementById('filter-status').value = '';
   document.getElementById('filter-source').value = '';
   document.getElementById('filter-flag').value = '';
+  filterNeedsWork = false;
+  document.getElementById('btn-needs-work').classList.remove('active');
+  renderCards();
+});
+document.getElementById('btn-needs-work').addEventListener('click', () => {
+  filterNeedsWork = !filterNeedsWork;
+  document.getElementById('btn-needs-work').classList.toggle('active', filterNeedsWork);
   renderCards();
 });
 document.getElementById('search').addEventListener('input', renderCards);
@@ -413,6 +422,7 @@ startListen();
   .btn.danger { color: var(--red); border-color: #f0bebe; }
   .btn.danger:hover { background: var(--red-light); }
   .btn.small { padding: 4px 10px; font-size: 12px; }
+  .btn.small.active { background: var(--green); color: #fff; border-color: var(--green); }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
   .flag-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; background: var(--red-light); color: var(--red); }
   .count-bar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
@@ -479,16 +489,17 @@ startListen();
     <div class="count-bar" id="count-bar"></div>
     <div class="filter-bar">
       <input type="text" id="search" placeholder="Search address, owner, notes…" style="max-width:210px;">
+      <button class="btn small" id="btn-needs-work">Needs work</button>
       <select id="filter-status">
         <option value="">All statuses</option>
-        <option>Letter sent</option>
-        <option>Letter returned</option>
+        <option>Planted</option>
+        <option>Ready to plant</option>
+        <option>Tree selected</option>
+        <option>Confirmed request</option>
         <option>Interested – contacted</option>
         <option>Awaiting response</option>
-        <option>Confirmed request</option>
-        <option>Tree selected</option>
-        <option>Ready to plant</option>
-        <option>Planted</option>
+        <option>Letter returned</option>
+        <option>Letter sent</option>
         <option>Not interested</option>
         <option>No response</option>
         <option>Hold</option>
