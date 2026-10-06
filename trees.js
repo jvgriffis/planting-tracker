@@ -20,19 +20,19 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 const firebaseConfig = {
-  apiKey: 'PASTE_YOUR_API_KEY_HERE',
-  authDomain: 'PASTE_YOUR_AUTH_DOMAIN_HERE',
-  projectId: 'PASTE_YOUR_PROJECT_ID_HERE',
-  storageBucket: 'PASTE_YOUR_STORAGE_BUCKET_HERE',
-  messagingSenderId: 'PASTE_YOUR_MESSAGING_SENDER_ID_HERE',
-  appId: 'PASTE_YOUR_APP_ID_HERE',
+  apiKey: 'AIzaSyD7rRlgyK53VyzBK0JgJDW4QAGLW58VqfA',
+  authDomain: 'tree-planting-tracker-b72c9.firebaseapp.com',
+  projectId: 'tree-planting-tracker-b72c9',
+  storageBucket: 'tree-planting-tracker-b72c9.firebasestorage.app',
+  messagingSenderId: '513598794921',
+  appId: '1:513598794921:web:0342df842c874c6318cdb8',
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const COL = 'planting2025';
-const ACCESS_DOC = 'config/access'; // Firestore path where password lives
+const ACCESS_DOC = 'config_access';
 
 // ── state ──────────────────────────────────────────────
 let records = [];
