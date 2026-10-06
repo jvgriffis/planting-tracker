@@ -32,7 +32,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const COL = 'planting2025';
-const ACCESS_DOC = 'config_access';
+const ACCESS_DOC = COL + '/config';
 
 // ── state ──────────────────────────────────────────────
 let records = [];
