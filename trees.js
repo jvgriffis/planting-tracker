@@ -11,6 +11,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  writeBatch,
   getDoc,
   onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
@@ -446,73 +447,99 @@ async function saveNote() {
 }
 
 // ── bulk edit ──────────────────────────────────────────
-function openBulkModal() {
-  document.getElementById('bulk-from').value = '';
-  document.getElementById('bulk-to').value = '';
-  document.getElementById('bulk-note').value = '';
-  document.getElementById('bulk-preview').innerHTML = '';
+const selected = new Set();
+
+const plural = n => `${n} record${n === 1 ? '' : 's'}`;
+
+const updateBulkBar = visibleIds => {
+  const bar = document.getElementById('bulk-bar');
+  bar.style.display = selected.size ? 'flex' : 'none';
+  document.getElementById('bulk-count').textContent =
+    plural(selected.size) + ' selected';
+  const all = document.getElementById('select-all');
+  const picked = visibleIds.filter(id => selected.has(id)).length;
+  all.checked = visibleIds.length > 0 && picked === visibleIds.length;
+  all.indeterminate = picked > 0 && picked < visibleIds.length;
+};
+
+const clearSelection = () => {
+  selected.clear();
+  renderCards();
+};
+
+const openBulkModal = () => {
+  if (!selected.size) return;
+  const picks = records.filter(r => selected.has(r.id));
+  document.getElementById('bulk-preview').innerHTML =
+    `Will update <strong>${plural(
+      picks.length
+    )}</strong>: ${picks.map(r => esc(r.housenum + ' ' + r.street)).join(', ')}`;
+  ['bulk-status', 'bulk-season', 'bulk-followup', 'bulk-note'].forEach(
+    id => (document.getElementById(id).value = '')
+  );
   document.getElementById('bulk-modal').classList.add('open');
-}
-function closeBulkModal() {
+};
+
+const closeBulkModal = () => {
   document.getElementById('bulk-modal').classList.remove('open');
-}
+};
 
-function previewBulk() {
-  const from = document.getElementById('bulk-from').value;
-  if (!from) {
-    document.getElementById('bulk-preview').innerHTML =
-      '<span style="color:var(--text-muted);font-size:12px;">Select a "from" status first.</span>';
-    return;
-  }
-  const matches = records.filter(r => r.status === from);
-  document.getElementById('bulk-preview').innerHTML = matches.length
-    ? `<span style="font-size:12px;color:var(--text-muted);">Will update <strong>${
-        matches.length
-      }</strong> record${matches.length === 1 ? '' : 's'}: ${matches
-        .map(r => r.housenum + ' ' + r.street)
-        .join(', ')}</span>`
-    : `<span style="font-size:12px;color:var(--text-muted);">No records with that status.</span>`;
-}
-
-async function runBulkUpdate() {
-  const from = document.getElementById('bulk-from').value;
-  const to = document.getElementById('bulk-to').value;
+const runBulkUpdate = async () => {
+  const status = document.getElementById('bulk-status').value;
+  const season = document.getElementById('bulk-season').value;
+  const followup = document.getElementById('bulk-followup').value;
   const note = document.getElementById('bulk-note').value.trim();
-  if (!from || !to) {
-    alert('Select both a "from" and "to" status.');
+  if (!status && !season && !followup && !note) {
+    alert('Choose at least one change.');
     return;
   }
-  if (from === to) {
-    alert('"From" and "to" status are the same.');
-    return;
-  }
-  const matches = records.filter(r => r.status === from);
-  if (!matches.length) {
-    alert('No records with that status.');
-    return;
-  }
-  if (
-    !confirm(
-      `Update ${matches.length} record${
-        matches.length === 1 ? '' : 's'
-      } from "${from}" to "${to}"?`
-    )
-  )
-    return;
+  const picks = records.filter(r => selected.has(r.id));
+  if (!confirm(`Apply changes to ${plural(picks.length)}?`)) return;
   closeBulkModal();
-  showStatus(`Updating ${matches.length} records…`);
-  const logText = `Bulk update: ${from} → ${to}` + (note ? ' — ' + note : '');
-  for (const r of matches) {
-    const updated = {
-      ...r,
-      status: to,
-      updated: ts(),
-      log: [...(r.log || []), {date: ts(), text: logText}],
-    };
-    await saveToFirebase(updated);
+  showStatus(`Updating ${plural(picks.length)}…`);
+  const batch = writeBatch(db);
+  let count = 0;
+  for (const r of picks) {
+    const next = {...r};
+    const logParts = [];
+    if (status && status !== r.status) {
+      next.status = status;
+      logParts.push('Status → ' + status);
+    }
+    if (season) {
+      const val = season === '__clear__' ? '' : season;
+      if (val !== (r.season || '')) {
+        next.season = val;
+        logParts.push(val ? 'Season → ' + val : 'Season cleared');
+      }
+    }
+    if (followup && (followup === 'set') !== !!r.followup) {
+      next.followup = followup === 'set';
+      logParts.push(
+        next.followup ? 'Flagged for follow-up' : 'Follow-up cleared'
+      );
+    }
+    if (note) logParts.push(note);
+    if (!logParts.length) continue;
+    next.updated = ts();
+    next.log = [
+      ...(r.log || []),
+      {date: ts(), text: 'Bulk update: ' + logParts.join(' · ')},
+    ];
+    const {id, ...data} = next;
+    batch.set(doc(db, COL, id), data);
+    count++;
   }
-  hideStatus();
-}
+  try {
+    if (count) await batch.commit();
+    selected.clear();
+    hideStatus();
+    renderCards();
+  } catch (e) {
+    showStatus('⚠ Bulk update failed — no records were changed.');
+    console.error(e);
+  }
+};
 
 // ── note history modal ─────────────────────────────────
 function openHistoryModal(id) {
@@ -606,6 +633,10 @@ function renderCards() {
     );
   });
   sortRecords(filtered);
+  const visibleIds = filtered.map(r => r.id);
+  // hidden records drop out of the selection
+  for (const id of selected) if (!visibleIds.includes(id)) selected.delete(id);
+  updateBulkBar(visibleIds);
   const el = document.getElementById('cards');
   if (!filtered.length) {
     el.innerHTML = '<p class="empty">No records match your filters.</p>';
@@ -619,9 +650,13 @@ function renderCards() {
       const hasMore = logs.length > 1;
       return `<div class="card${r.followup ? ' flagged' : ''}${
         r.status === COMPLETE_STATUS ? ' complete-card' : ''
-      }">
+      }${selected.has(r.id) ? ' selected' : ''}">
       <div class="card-header">
-        <div>
+        <div class="card-head-left">
+          <input type="checkbox" class="card-select" data-id="${r.id}"${
+            selected.has(r.id) ? ' checked' : ''
+          }>
+          <div>
           <div class="card-addr">${esc(r.housenum)} ${esc(r.street)}${
             r.followup ? ' <span class="flag-badge">! follow-up</span>' : ''
           }</div>
@@ -630,6 +665,7 @@ function renderCards() {
           )} &middot; via ${esc(r.source || 'unknown')}${
             r.season ? ' &middot; ' + esc(r.season) : ''
           } &middot; updated ${esc(r.updated || r.created)}</div>
+          </div>
         </div>
         <div class="card-actions">
           <button class="btn small" onclick="openNoteModal('${
@@ -830,12 +866,12 @@ async function saveSeason() {
 function populateSeasonSelects() {
   const opts = seasonOptions();
   const optHTML = opts.map(s => `<option>${s}</option>`).join('');
-  document.getElementById(
-    'filter-season'
-  ).innerHTML = `<option value="">All seasons</option><option value="__untagged__">Untagged</option>${optHTML}`;
-  document.getElementById(
-    'f-season'
-  ).innerHTML = `<option value="">— not set —</option>${optHTML}`;
+  document.getElementById('filter-season').innerHTML =
+    `<option value="">All seasons</option><option value="__untagged__">Untagged</option>${optHTML}`;
+  document.getElementById('f-season').innerHTML =
+    `<option value="">— not set —</option>${optHTML}`;
+  document.getElementById('bulk-season').innerHTML =
+    `<option value="">— keep current —</option><option value="__clear__">— clear season —</option>${optHTML}`;
 }
 
 // ── wire up events ─────────────────────────────────────
@@ -886,7 +922,24 @@ document
   .getElementById('filter-season')
   .addEventListener('change', renderCards);
 document.getElementById('hist-search').addEventListener('input', renderHistory);
-document.getElementById('bulk-from').addEventListener('change', previewBulk);
+document
+  .getElementById('btn-clear-sel')
+  .addEventListener('click', clearSelection);
+document.getElementById('cards').addEventListener('change', e => {
+  if (!e.target.classList.contains('card-select')) return;
+  const id = e.target.dataset.id;
+  if (e.target.checked) selected.add(id);
+  else selected.delete(id);
+  renderCards();
+});
+document.getElementById('select-all').addEventListener('change', e => {
+  const ids = [...document.querySelectorAll('.card-select')].map(
+    box => box.dataset.id
+  );
+  if (e.target.checked) ids.forEach(id => selected.add(id));
+  else ids.forEach(id => selected.delete(id));
+  renderCards();
+});
 
 document.getElementById('show-complete').addEventListener('change', e => {
   showComplete = e.target.checked;

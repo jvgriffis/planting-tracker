@@ -496,3 +496,35 @@ textarea {
     margin-left: 0;
   }
 }
+#bulk-bar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: var(--teal-light);
+  color: var(--teal);
+  border: 1px solid var(--teal);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+#bulk-count {
+  font-weight: 500;
+  margin-right: auto;
+}
+.card-head-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.card-select {
+  width: auto;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.card.selected {
+  box-shadow: 0 0 0 2px var(--teal);
+}
