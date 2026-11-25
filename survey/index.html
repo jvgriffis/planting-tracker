@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planting Site Survey</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="../trees.css">
+<link rel="stylesheet" href="./survey.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module" src="./survey.js"></script>
+</head>
+<body>
+
+<!-- Lock screen (same password as the planting tracker) -->
+<div id="lock-screen">
+  <div id="lock-box">
+    <div id="lock-title">🌳 Planting Site Survey</div>
+    <div id="lock-sub">East Aurora</div>
+    <input id="lock-input" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="lock-btn">Enter</button>
+    <div id="lock-error"></div>
+  </div>
+</div>
+
+<div id="app-wrap" style="display:none;">
+<div class="app">
+  <div id="status-bar"></div>
+
+  <div class="app-header">
+    <div>
+      <div class="app-title">Planting site survey</div>
+      <div class="app-sub">
+        <a href="../index.html" class="back-link">← Planting tracker</a>
+      </div>
+    </div>
+    <div class="header-actions">
+      <select id="year-select" aria-label="Survey year"></select>
+      <button class="btn" id="btn-setup-year">Set up year…</button>
+    </div>
+  </div>
+
+  <div id="year-empty" class="empty" style="display:none;">
+    No survey set up for this year yet. <button class="btn small primary" id="btn-setup-year-2">Set up year…</button>
+  </div>
+
+  <div id="year-body">
+    <div class="year-banner" id="year-banner"></div>
+    <div class="count-bar" id="summary"></div>
+
+    <div class="action-row">
+      <button class="btn primary" id="btn-add">+ Add site</button>
+      <button class="btn" id="btn-export">Export to Excel ↓</button>
+      <button class="btn" id="btn-handoff">Send selected to tracker →</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="sites">Sites</button>
+      <button class="tab" data-tab="streets">Streets</button>
+      <button class="tab" data-tab="map">Map</button>
+    </div>
+
+    <!-- Sites -->
+    <div id="sites" class="section active">
+      <div class="filter-bar">
+        <input type="text" id="search" placeholder="Search address, notes…" style="max-width:210px;">
+        <select id="filter-status"><option value="">All statuses</option></select>
+        <select id="filter-priority"><option value="">All priorities</option></select>
+        <select id="filter-street"><option value="">All streets</option></select>
+        <label class="complete-toggle">
+          <input type="checkbox" id="select-all">
+          <span>Select all</span>
+        </label>
+        <div class="sort-group">
+          <span class="sort-label">Sort:</span>
+          <button class="sort-btn active" data-sort="priority">Priority</button>
+          <button class="sort-btn" data-sort="street">Street</button>
+          <button class="sort-btn" data-sort="date">Last updated</button>
+        </div>
+      </div>
+      <div id="bulk-bar">
+        <span id="bulk-count"></span>
+        <select id="bulk-status"><option value="">Set status…</option></select>
+        <button class="btn small primary" id="btn-bulk">Apply</button>
+        <button class="btn small" id="btn-clear-sel">Clear selection</button>
+      </div>
+      <div id="cards"></div>
+    </div>
+
+    <!-- Streets -->
+    <div id="streets" class="section">
+      <p class="muted hint">Check a street off once it has been walked or driven end to end. Streets marked <span class="partial-tag">partial</span> cross a quadrant boundary — only survey the part inside this quadrant.</p>
+      <div class="filter-bar">
+        <input type="text" id="new-street" placeholder="Add a street, e.g. Elm St" style="max-width:240px;">
+        <button class="btn small" id="btn-add-street">+ Add street</button>
+        <label class="complete-toggle">
+          <input type="checkbox" id="hide-walked">
+          <span>Hide walked</span>
+        </label>
+      </div>
+      <div id="street-list"></div>
+    </div>
+
+    <!-- Map -->
+    <div id="map" class="section">
+      <div class="map-legend">
+        <span><i class="dot" style="background:#c0392b"></i>High</span>
+        <span><i class="dot" style="background:#e0a100"></i>Medium</span>
+        <span><i class="dot" style="background:#3a7bd5"></i>Low</span>
+        <span><i class="dot ring"></i>Not suitable</span>
+        <span><i class="dot small" style="background:#8fbf6a"></i>Existing tree</span>
+        <span><i class="dot small" style="background:#222"></i>Removed tree</span>
+        <label class="complete-toggle"><input type="checkbox" id="show-inventory" checked><span>Show inventory</span></label>
+      </div>
+      <p class="muted hint">Tap the map to add a site there.</p>
+      <div id="main-map" class="map-box tall"></div>
+    </div>
+  </div>
+</div><!-- /.app -->
+
+<!-- Add/edit site -->
+<div class="modal-bg" id="site-modal">
+  <div class="modal site-modal">
+    <div class="modal-title" id="site-modal-title">Add site</div>
+    <div class="row2">
+      <div><label>House number</label><input id="f-housenum" type="text" inputmode="numeric" placeholder="e.g. 124"></div>
+      <div><label>Street</label><input id="f-street" type="text" list="street-options" placeholder="e.g. Elm St" autocomplete="off"></div>
+    </div>
+    <datalist id="street-options"></datalist>
+
+    <label>Priority</label>
+    <div class="seg" id="f-priority"></div>
+
+    <div class="row2">
+      <div>
+        <label>Size allowed</label>
+        <div class="seg" id="f-size"></div>
+      </div>
+      <div>
+        <label>Status</label>
+        <select id="f-status"></select>
+      </div>
+    </div>
+
+    <label>ROW condition</label>
+    <input id="f-row" type="text" list="row-options" placeholder="e.g. Grass strip, ~6 ft">
+    <datalist id="row-options">
+      <option>Grass strip between sidewalk and curb</option>
+      <option>Open lawn, no sidewalk</option>
+      <option>Narrow strip (under 4 ft)</option>
+      <option>Compacted / gravel</option>
+    </datalist>
+
+    <label>Obstructions</label>
+    <div class="checks" id="f-obstructions"></div>
+
+    <label>Location <span class="muted" id="pin-label">— tap the map or use GPS</span></label>
+    <div class="pin-tools">
+      <button class="btn small" id="btn-gps" type="button">📍 Use my location</button>
+      <button class="btn small" id="btn-clear-pin" type="button">Clear pin</button>
+    </div>
+    <div id="site-map" class="map-box"></div>
+    <div id="nearby" class="nearby"></div>
+
+    <div class="row2">
+      <div><label>Surveyor</label><input id="f-surveyor" type="text" placeholder="Your name"></div>
+      <div><label>Survey date</label><input id="f-date" type="date"></div>
+    </div>
+
+    <label>Note</label>
+    <textarea id="f-note" placeholder="Add a note (timestamped automatically)"></textarea>
+    <div id="f-log" class="muted log-preview"></div>
+
+    <div class="form-actions">
+      <button class="btn danger" id="btn-delete-site" style="margin-right:auto;">Delete</button>
+      <button class="btn" id="btn-cancel-site">Cancel</button>
+      <button class="btn primary" id="btn-save-site">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Year setup -->
+<div class="modal-bg" id="year-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">Set up survey year</div>
+    <div class="row2">
+      <div><label>Year</label><input id="y-year" type="number" min="2020" max="2100"></div>
+      <div>
+        <label>Quadrant</label>
+        <select id="y-quadrant"></select>
+      </div>
+    </div>
+    <p class="muted hint" id="y-note"></p>
+    <div class="form-actions">
+      <button class="btn" id="btn-cancel-year">Cancel</button>
+      <button class="btn primary" id="btn-save-year">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hand-off -->
+<div class="modal-bg" id="handoff-modal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title">Send selected sites to tracker</div>
+    <div id="handoff-body" class="hint"></div>
+    <div class="form-actions">
+      <button class="btn" id="btn-cancel-handoff">Cancel</button>
+      <button class="btn primary" id="btn-run-handoff">Send</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /#app-wrap -->
+
+</body>
+</html>

@@ -59,6 +59,8 @@ const STATUS_ORDER = [
 ];
 const EXPORT_EXCLUDE = new Set(['Hold', 'Cannot plant', 'Complete']);
 const COMPLETE_STATUS = 'Complete';
+// hidden from the list unless "Show all" is checked or the status filter selects them
+const HIDDEN_STATUSES = new Set(['Complete', 'Cannot plant']);
 const STATUS_COLORS = {
   'Letter sent': {bg: '#E6F1FB', color: '#0C447C'},
   'Letter returned': {bg: '#FAEEDA', color: '#633806'},
@@ -75,7 +77,7 @@ const STATUS_COLORS = {
   Complete: {bg: '#E8EEE8', color: '#3A5A3A'},
 };
 
-let showComplete = false;
+let showAll = false;
 
 // ── season helpers ─────────────────────────────────────
 function seasonOptions() {
@@ -281,6 +283,31 @@ function sortRecords(arr) {
 }
 
 // ── add/edit modal ─────────────────────────────────────
+const STREET_SUFFIXES = {
+  st: 'street', str: 'street', ave: 'avenue', av: 'avenue', rd: 'road',
+  dr: 'drive', ln: 'lane', ct: 'court', pl: 'place', blvd: 'boulevard',
+  pkwy: 'parkway', cir: 'circle', ter: 'terrace', terr: 'terrace',
+  hwy: 'highway', sq: 'square', trl: 'trail', n: 'north', s: 'south',
+  e: 'east', w: 'west',
+};
+
+const addressKey = (housenum, street) => {
+  const words = `${housenum} ${street}`
+    .toLowerCase()
+    .replace(/[.,#]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => STREET_SUFFIXES[word] || word);
+  return words.join(' ');
+};
+
+const findDuplicate = (housenum, street, excludeId) => {
+  const key = addressKey(housenum, street);
+  return records.find(
+    r => r.id !== excludeId && addressKey(r.housenum, r.street) === key
+  );
+};
+
 function openAdd() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'Add address';
@@ -332,6 +359,21 @@ async function saveRecord() {
   const street = document.getElementById('f-street').value.trim();
   if (!housenum || !street) {
     alert('House number and street are required.');
+    return;
+  }
+  const dupe = findDuplicate(housenum, street, editingId);
+  if (dupe) {
+    const label = `${dupe.housenum} ${dupe.street}${
+      dupe.owner ? ' · ' + dupe.owner : ''
+    }`;
+    if (
+      confirm(
+        `${label} already exists (status: ${
+          dupe.status || 'none'
+        }).\n\nOpen the existing record instead? Unsaved changes here will be lost.`
+      )
+    )
+      openEdit(dupe.id);
     return;
   }
   const note = document.getElementById('f-note').value.trim();
@@ -586,7 +628,10 @@ function renderCountBar() {
     'Cannot plant',
     'Complete',
   ];
-  const completeCount = counts['Complete'] || 0;
+  const hiddenCount = [...HIDDEN_STATUSES].reduce(
+    (sum, s) => sum + (counts[s] || 0),
+    0
+  );
   let html = `<div class="count-pill">Total <strong>${records.length}</strong></div>`;
   if (flagCount)
     html += `<div class="count-pill flag-pill"><strong>${flagCount}</strong> follow-up</div>`;
@@ -597,8 +642,8 @@ function renderCountBar() {
       }</strong></div>`;
   });
   document.getElementById('count-bar').innerHTML = html;
-  const lbl = document.getElementById('show-complete-label');
-  if (lbl) lbl.textContent = `Show complete (${completeCount})`;
+  const lbl = document.getElementById('show-all-label');
+  if (lbl) lbl.textContent = `Show all (+${hiddenCount} complete/cannot plant)`;
 }
 
 function renderCards() {
@@ -608,7 +653,7 @@ function renderCards() {
   const fflag = document.getElementById('filter-flag').value;
   const fseason = document.getElementById('filter-season').value;
   let filtered = records.filter(r => {
-    if (!showComplete && r.status === COMPLETE_STATUS) return false;
+    if (!showAll && !fs && HIDDEN_STATUSES.has(r.status)) return false;
     const hay = [
       r.housenum,
       r.street,
@@ -941,8 +986,8 @@ document.getElementById('select-all').addEventListener('change', e => {
   renderCards();
 });
 
-document.getElementById('show-complete').addEventListener('change', e => {
-  showComplete = e.target.checked;
+document.getElementById('show-all').addEventListener('change', e => {
+  showAll = e.target.checked;
   renderCards();
 });
 

@@ -1,0 +1,422 @@
+{
+ "NW": [
+  {
+   "name": "Bowen Rd",
+   "partial": false
+  },
+  {
+   "name": "Buffalo Rd",
+   "partial": false
+  },
+  {
+   "name": "Ernst Pl",
+   "partial": true
+  },
+  {
+   "name": "Girard Ave",
+   "partial": true
+  },
+  {
+   "name": "Grey St",
+   "partial": true
+  },
+  {
+   "name": "Hamlin Ave",
+   "partial": false
+  },
+  {
+   "name": "Knox Rd",
+   "partial": false
+  },
+  {
+   "name": "Main St",
+   "partial": true
+  },
+  {
+   "name": "Maple St",
+   "partial": true
+  },
+  {
+   "name": "N Willow St",
+   "partial": false
+  },
+  {
+   "name": "North St",
+   "partial": true
+  },
+  {
+   "name": "Parkdale Ave",
+   "partial": false
+  },
+  {
+   "name": "Shearer Ave",
+   "partial": false
+  },
+  {
+   "name": "W Fillmore Ave",
+   "partial": false
+  }
+ ],
+ "NE": [
+  {
+   "name": "Brooklea Dr",
+   "partial": false
+  },
+  {
+   "name": "Byeberry Ct",
+   "partial": false
+  },
+  {
+   "name": "Carriage Dr",
+   "partial": false
+  },
+  {
+   "name": "Church St",
+   "partial": false
+  },
+  {
+   "name": "Dorchester Rd",
+   "partial": false
+  },
+  {
+   "name": "E Fillmore Ave",
+   "partial": false
+  },
+  {
+   "name": "Fillmore Ave",
+   "partial": false
+  },
+  {
+   "name": "Girard Ave",
+   "partial": true
+  },
+  {
+   "name": "Godfrey Ter",
+   "partial": false
+  },
+  {
+   "name": "Green St",
+   "partial": false
+  },
+  {
+   "name": "Lawrence Ave",
+   "partial": false
+  },
+  {
+   "name": "Main St",
+   "partial": true
+  },
+  {
+   "name": "Maple St",
+   "partial": true
+  },
+  {
+   "name": "Martin Dr",
+   "partial": false
+  },
+  {
+   "name": "Mary Janes Ln",
+   "partial": false
+  },
+  {
+   "name": "Maryann Dr",
+   "partial": false
+  },
+  {
+   "name": "N Grove St",
+   "partial": false
+  },
+  {
+   "name": "North St",
+   "partial": true
+  },
+  {
+   "name": "Persons Alley",
+   "partial": false
+  },
+  {
+   "name": "Pine St",
+   "partial": false
+  },
+  {
+   "name": "Porterville Rd",
+   "partial": false
+  },
+  {
+   "name": "Pratt St",
+   "partial": false
+  },
+  {
+   "name": "Ridge Ave",
+   "partial": false
+  },
+  {
+   "name": "Riley St",
+   "partial": false
+  },
+  {
+   "name": "Ruskin Rd",
+   "partial": false
+  },
+  {
+   "name": "Stoneridge Ct",
+   "partial": false
+  },
+  {
+   "name": "Surrey Run Rd",
+   "partial": false
+  },
+  {
+   "name": "The Meadow",
+   "partial": false
+  },
+  {
+   "name": "Tolland Bore",
+   "partial": false
+  },
+  {
+   "name": "Tunbridge Walke",
+   "partial": false
+  },
+  {
+   "name": "Warren Dr",
+   "partial": false
+  },
+  {
+   "name": "Whaley Ave",
+   "partial": false
+  }
+ ],
+ "SE": [
+  {
+   "name": "Blake Hill Rd",
+   "partial": false
+  },
+  {
+   "name": "Castle Hill Rd",
+   "partial": false
+  },
+  {
+   "name": "Chestnut Hill Rd",
+   "partial": false
+  },
+  {
+   "name": "Crescent Ave",
+   "partial": false
+  },
+  {
+   "name": "Elm St",
+   "partial": false
+  },
+  {
+   "name": "Elmwood Ave",
+   "partial": false
+  },
+  {
+   "name": "Gleed Ave",
+   "partial": false
+  },
+  {
+   "name": "Griggs Pl",
+   "partial": true
+  },
+  {
+   "name": "Hilliker Ct",
+   "partial": false
+  },
+  {
+   "name": "King St",
+   "partial": false
+  },
+  {
+   "name": "Linden Ave",
+   "partial": true
+  },
+  {
+   "name": "Main St",
+   "partial": true
+  },
+  {
+   "name": "Millard Fillmore Pl",
+   "partial": false
+  },
+  {
+   "name": "Nye Hill Rd",
+   "partial": false
+  },
+  {
+   "name": "Oakwood Ave",
+   "partial": true
+  },
+  {
+   "name": "Olean St",
+   "partial": false
+  },
+  {
+   "name": "Paine St",
+   "partial": false
+  },
+  {
+   "name": "Park Pl",
+   "partial": true
+  },
+  {
+   "name": "Pennsylvania Ave",
+   "partial": false
+  },
+  {
+   "name": "Persons St",
+   "partial": false
+  },
+  {
+   "name": "Prospect Ave",
+   "partial": true
+  },
+  {
+   "name": "Ravine Ct",
+   "partial": false
+  },
+  {
+   "name": "S Park Pl",
+   "partial": true
+  },
+  {
+   "name": "Savage Pl",
+   "partial": false
+  },
+  {
+   "name": "South St",
+   "partial": true
+  },
+  {
+   "name": "Sycamore St",
+   "partial": false
+  },
+  {
+   "name": "Temple Pl",
+   "partial": false
+  }
+ ],
+ "SW": [
+  {
+   "name": "Beech Rd",
+   "partial": false
+  },
+  {
+   "name": "Boies Alley",
+   "partial": false
+  },
+  {
+   "name": "Cazenovia St",
+   "partial": false
+  },
+  {
+   "name": "Center St",
+   "partial": false
+  },
+  {
+   "name": "Commerce Way",
+   "partial": false
+  },
+  {
+   "name": "Douglas Ln",
+   "partial": false
+  },
+  {
+   "name": "Ernst Pl",
+   "partial": true
+  },
+  {
+   "name": "Fairlawn Ct",
+   "partial": false
+  },
+  {
+   "name": "Fairlawn Dr",
+   "partial": false
+  },
+  {
+   "name": "Grey St",
+   "partial": true
+  },
+  {
+   "name": "Griggs Pl",
+   "partial": true
+  },
+  {
+   "name": "Hamburg St",
+   "partial": false
+  },
+  {
+   "name": "Kelly Dr",
+   "partial": false
+  },
+  {
+   "name": "Legion Dr",
+   "partial": false
+  },
+  {
+   "name": "Linden Ave",
+   "partial": true
+  },
+  {
+   "name": "Main St",
+   "partial": true
+  },
+  {
+   "name": "Mill Rd",
+   "partial": false
+  },
+  {
+   "name": "Oakwood Ave",
+   "partial": true
+  },
+  {
+   "name": "Park Pl",
+   "partial": true
+  },
+  {
+   "name": "Perry St",
+   "partial": false
+  },
+  {
+   "name": "Prospect Ave",
+   "partial": true
+  },
+  {
+   "name": "Quaker Rd",
+   "partial": false
+  },
+  {
+   "name": "S Grove St",
+   "partial": false
+  },
+  {
+   "name": "S Park Pl",
+   "partial": true
+  },
+  {
+   "name": "S Willow St",
+   "partial": false
+  },
+  {
+   "name": "South St",
+   "partial": true
+  },
+  {
+   "name": "Spring St",
+   "partial": false
+  },
+  {
+   "name": "Walnut St",
+   "partial": false
+  },
+  {
+   "name": "Woodbrook Dr",
+   "partial": false
+  },
+  {
+   "name": "Woodside Ave",
+   "partial": false
+  }
+ ]
+}
